@@ -160,12 +160,10 @@
                     <span class="eyebrow">${type.label}</span>
                     <a class="nomination-person" href="/user.html?id=${track.author_id}">
                         <img class="nomination-avatar" src="${escapeHtml(avatarUrl(track.author_avatar))}" alt="Аватар ${escapeHtml(track.author_name || track.artist_name)}">
-                        <span class="nomination-person-copy">
-                            <strong>${escapeHtml(track.author_name || track.artist_name)}</strong>
-                            <span class="muted">За трек «${escapeHtml(track.title)}»</span>
-                        </span>
                     </a>
-                    <div class="score">${track.total_score}/50</div>
+                    <a class="nomination-person-name" href="/user.html?id=${track.author_id}">
+                        <strong>${escapeHtml(track.author_name || track.artist_name)}</strong>
+                    </a>
                 </article>
             `;
         }
