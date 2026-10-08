@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CHUPEP - Личный кабинет</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="page-profile">
+    <div class="shell">
+        <header class="topbar">
+            <div class="brand">
+                <div class="brand-badge">
+                    <img class="brand-logo" src="/chupep-logo.jfif" alt="CHUPEP logo">
+                </div>
+                <div class="brand-copy">
+                    <h1>CHUPEP</h1>
+                    <p>Оценка треков</p>
+                </div>
+            </div>
+            <nav class="nav" data-nav></nav>
+            <div class="topbar-actions" data-actions></div>
+        </header>
+
+        <div class="page-head page-head-single">
+            <div class="section-title">
+                <span class="eyebrow">Аккаунт</span>
+                <h2>Профиль</h2>
+                <p>Здесь меняются аватар, имя, email и пароль.</p>
+            </div>
+        </div>
+
+        <div id="profile-message" class="message"></div>
+
+        <section class="profile-grid">
+            <aside class="glass-panel panel profile-card">
+                <div class="profile-hero">
+                    <img id="avatar-preview" class="avatar-preview" src="/chupep-logo.jfif" alt="Аватар">
+                    <div>
+                        <h3 id="profile-name" class="profile-name">Профиль</h3>
+                        <p id="profile-meta" class="profile-meta"></p>
+                    </div>
+                </div>
+
+                <form id="avatar-form" class="avatar-form">
+                    <div class="field">
+                        <label for="avatar-file">Смена аватара</label>
+                        <input id="avatar-file" name="avatar" type="file" accept="image/*" required>
+                    </div>
+                    <button type="submit">Обновить аватар</button>
+                </form>
+
+                <div class="profile-stat-grid">
+                    <div class="profile-stat">
+                        <strong id="tracks-count">0</strong>
+                        <span class="muted">треков загружено</span>
+                    </div>
+                    <div class="profile-stat">
+                        <strong id="evaluations-count">0</strong>
+                        <span class="muted">оценок сохранено</span>
+                    </div>
+                </div>
+
+                <div class="info-list">
+                    <div class="info-row">
+                        <strong>Email</strong>
+                        <span id="profile-email" class="muted"></span>
+                    </div>
+                    <div class="info-row">
+                        <strong>Статус почты</strong>
+                        <span id="profile-status" class="muted"></span>
+                    </div>
+                    <div class="info-row">
+                        <strong>Дата регистрации</strong>
+                        <span id="profile-created" class="muted"></span>
+                    </div>
+                    <div class="info-row">
+                        <strong>Ожидает подтверждения</strong>
+                        <span id="pending-email" class="muted">Нет</span>
+                    </div>
+                </div>
+            </aside>
+
+            <section class="glass-panel panel">
+                <h3>Настройки профиля</h3>
+                <p class="panel-subtitle">
+                    Для смены email и пароля нужно подтверждение по почте.
+                </p>
+                <form id="profile-form" class="stack">
+                    <div class="field">
+                        <label for="profile-display-name">Имя или ник</label>
+                        <input id="profile-display-name" name="displayName" type="text" required>
+                    </div>
+                    <div class="field">
+                        <label for="profile-email-edit">Email</label>
+                        <input id="profile-email-edit" name="email" type="email" required>
+                    </div>
+                    <div class="field">
+                        <label for="profile-password">Новый пароль</label>
+                        <input id="profile-password" name="password" type="password">
+                    </div>
+                    <button class="full" type="submit">Сохранить изменения</button>
+                </form>
+            </section>
+        </section>
+
+        <footer class="site-footer">
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <span class="eyebrow">Связь и площадки</span>
+                    <h3>CHUPEP</h3>
+                    <p>Разбор треков на стриме, загрузка релизов и итоговая таблица месяца в одном месте.</p>
+                </div>
+                <div class="footer-links">
+                    <a href="https://t.me/CURSED_DEVIL" target="_blank" rel="noreferrer">
+                        <span>Telegram</span>
+                        <strong>@CURSED_DEVIL</strong>
+                    </a>
+                    <a href="https://t.me/curseddevil66" target="_blank" rel="noreferrer">
+                        <span>Канал</span>
+                        <strong>Телеграм-канал</strong>
+                    </a>
+                    <a href="https://t.me/tribute/app?startapp=sqoZ" target="_blank" rel="noreferrer">
+                        <span>Поддержка</span>
+                        <strong>Приватный канал</strong>
+                    </a>
+                    <a href="https://vk.com/cursed_devil666" target="_blank" rel="noreferrer">
+                        <span>Сообщество</span>
+                        <strong>Группа VK</strong>
+                    </a>
+                    <a href="https://www.twitch.tv/curseddevillll" target="_blank" rel="noreferrer">
+                        <span>Стримы</span>
+                        <strong>Twitch</strong>
+                    </a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script src="/app.js"></script>
+    <script>
+        const message = document.getElementById('profile-message');
+        const form = document.getElementById('profile-form');
+        const avatarForm = document.getElementById('avatar-form');
+        let currentUser = null;
+
+        function buildExtraLinks(links) {
+            if (!Array.isArray(links) || !links.length) {
+                return '';
+            }
+
+            return links
+                .map((link) => `<div><a href="${link.url}" target="_blank" rel="noreferrer">${link.label}</a></div>`)
+                .join('');
+        }
+
+        function fillProfile(payload) {
+            const user = payload.user;
+            currentUser = user;
+            setupTopbar('/profile.html', user);
+            document.getElementById('profile-name').textContent = user.displayName;
+            document.getElementById('profile-meta').textContent = `${roleLabel(user.role)} · ${user.verified ? 'почта подтверждена' : 'почта не подтверждена'}`;
+            document.getElementById('profile-email').textContent = user.email;
+            document.getElementById('profile-status').textContent = user.verified ? 'Подтверждена' : 'Ожидает подтверждения';
+            document.getElementById('profile-created').textContent = formatDate(user.createdAt);
+            document.getElementById('tracks-count').textContent = String(payload.stats.tracks || 0);
+            document.getElementById('evaluations-count').textContent = String(payload.stats.evaluations || 0);
+            document.getElementById('profile-display-name').value = user.displayName || '';
+            document.getElementById('profile-email-edit').value = user.email || '';
+            document.getElementById('pending-email').textContent = user.pendingEmail ? user.pendingEmail : 'Нет';
+            document.getElementById('avatar-preview').src = avatarUrl(user.avatarPath);
+            applyRevealAnimations();
+        }
+
+        async function loadProfile() {
+            const payload = await apiFetch('/api/profile');
+            fillProfile(payload);
+        }
+
+        avatarForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            hideMessage(message);
+
+            const formData = new FormData(avatarForm);
+            try {
+                const result = await apiFetch('/api/profile/avatar', {
+                    method: 'POST',
+                    body: formData
+                });
+                showMessage(message, 'success', result.message);
+                avatarForm.reset();
+                await loadProfile();
+            } catch (error) {
+                showMessage(message, 'error', error.message);
+            }
+        });
+
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            hideMessage(message);
+
+            const formData = new FormData(form);
+            const payload = {
+                displayName: String(formData.get('displayName') || '').trim(),
+                email: String(formData.get('email') || '').trim(),
+                password: String(formData.get('password') || '')
+            };
+
+            try {
+                const result = await apiFetch('/api/profile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                showMessage(message, 'success', result.message, buildExtraLinks(result.previewLinks));
+                document.getElementById('profile-password').value = '';
+                await loadProfile();
+            } catch (error) {
+                showMessage(message, 'error', error.message);
+            }
+        });
+
+        (async () => {
+            const user = await guardPage({
+                activePath: '/profile.html',
+                roles: ['author', 'viewer', 'streamer'],
+                requireVerified: true,
+                bannerElement: message
+            });
+
+            if (!user) {
+                return;
+            }
+
+            await loadProfile();
+
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('emailChanged') === '1') {
+                showMessage(message, 'success', 'Новый email подтверждён и уже привязан к аккаунту.');
+            } else if (params.get('emailChanged') === '0') {
+                showMessage(message, 'error', 'Не удалось подтвердить смену email.');
+            } else if (params.get('passwordChanged') === '1') {
+                showMessage(message, 'success', 'Новый пароль подтверждён и уже сохранён.');
+            } else if (params.get('passwordChanged') === '0') {
+                showMessage(message, 'error', 'Не удалось подтвердить смену пароля.');
+            }
+        })().catch((error) => {
+            showMessage(message, 'error', error.message);
+        });
+    </script>
+</body>
+</html>

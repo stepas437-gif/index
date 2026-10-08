@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CHUPEP - Рейтинг треков</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="page-results protected-page">
+    <div class="shell">
+        <header class="topbar">
+            <div class="brand">
+                <div class="brand-badge">
+                    <img class="brand-logo" src="/chupep-logo.jfif" alt="CHUPEP logo">
+                </div>
+                <div class="brand-copy">
+                    <h1>CHUPEP</h1>
+                    <p>Оценка треков</p>
+                </div>
+            </div>
+            <nav class="nav" data-nav></nav>
+            <div class="topbar-actions" data-actions></div>
+        </header>
+
+        <div class="page-head">
+            <div class="section-title">
+                <span class="eyebrow">Лидерборд</span>
+                <h2>Таблица результатов</h2>
+                <p>После каждого разбора треки сортируются по сумме баллов. Здесь же видны номинации месяца и текущий топ.</p>
+            </div>
+
+            <aside class="page-note">
+                <span class="eyebrow">Система оценок</span>
+                <ul class="bullet-list">
+                    <li>Сумма складывается из пяти критериев: текст, звук, индивидуальность, структура и вайб.</li>
+                    <li>Максимум за один разбор — 50 баллов.</li>
+                    <li>Лучший трек отмечается во время разбора, а лучший продюсер и артист выбираются стримером вручную.</li>
+                </ul>
+            </aside>
+        </div>
+
+        <div id="verify-banner" class="message"></div>
+
+        <section class="results-stack">
+            <section class="glass-panel panel">
+                <h3>Номинации месяца</h3>
+                <div id="nominations" class="nominations-grid"></div>
+            </section>
+
+            <section class="glass-panel panel">
+                <h3>Текущий пьедестал</h3>
+                <div id="podium" class="podium-grid"></div>
+            </section>
+
+            <section class="glass-panel panel results-table-panel">
+                <div class="leaderboard-head">
+                    <div>
+                        <span class="eyebrow">Общая таблица</span>
+                        <h3>Рейтинг треков</h3>
+                    </div>
+                </div>
+                <div class="leaderboard">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Место</th>
+                                <th>Трек</th>
+                                <th>Номинация</th>
+                                <th>Детали</th>
+                                <th>Сумма</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboard-body"></tbody>
+                    </table>
+                </div>
+            </section>
+        </section>
+
+        <footer class="site-footer">
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <span class="eyebrow">Связь и площадки</span>
+                    <h3>CHUPEP</h3>
+                    <p>Разбор треков на стриме, загрузка релизов и итоговая таблица месяца в одном месте.</p>
+                </div>
+                <div class="footer-links">
+                    <a href="https://t.me/CURSED_DEVIL" target="_blank" rel="noreferrer">
+                        <span>Telegram</span>
+                        <strong>@CURSED_DEVIL</strong>
+                    </a>
+                    <a href="https://t.me/curseddevil66" target="_blank" rel="noreferrer">
+                        <span>Канал</span>
+                        <strong>Телеграм-канал</strong>
+                    </a>
+                    <a href="https://t.me/tribute/app?startapp=sqoZ" target="_blank" rel="noreferrer">
+                        <span>Поддержка</span>
+                        <strong>Приватный канал</strong>
+                    </a>
+                    <a href="https://vk.com/cursed_devil666" target="_blank" rel="noreferrer">
+                        <span>Сообщество</span>
+                        <strong>Группа VK</strong>
+                    </a>
+                    <a href="https://www.twitch.tv/curseddevillll" target="_blank" rel="noreferrer">
+                        <span>Стримы</span>
+                        <strong>Twitch</strong>
+                    </a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script src="/app.js"></script>
+    <script>
+        const verifyBanner = document.getElementById('verify-banner');
+        const nominationsRoot = document.getElementById('nominations');
+        const podiumRoot = document.getElementById('podium');
+        const leaderboardBody = document.getElementById('leaderboard-body');
+
+        const nominationTypes = [
+            { key: 'best_track', label: 'Лучший трек' },
+            { key: 'best_producer', label: 'Лучший продюсер' },
+            { key: 'best_artist', label: 'Лучший артист' }
+        ];
+
+        function renderNominationBadges(track, emptyMarkup = '<span class="muted">—</span>') {
+            const keys = trackNominationKeys(track);
+            if (!keys.length) {
+                return emptyMarkup;
+            }
+
+            return keys
+                .map((key) => `<span class="nomination-badge">${escapeHtml(nominationLabel(key))}</span>`)
+                .join('');
+        }
+
+        function renderNominationCard(type, track) {
+            if (!track) {
+                return `
+                    <article class="nomination-card">
+                        <span class="eyebrow">${type.label}</span>
+                        <div class="empty-state">Пока не выбрано</div>
+                    </article>
+                `;
+            }
+
+            if (type.key === 'best_track') {
+                return `
+                    <article class="nomination-card">
+                        <span class="eyebrow">${type.label}</span>
+                        <img class="podium-cover" src="/uploads/${escapeHtml(track.cover_path)}" alt="Обложка ${escapeHtml(track.title)}">
+                        <strong>${escapeHtml(track.title)}</strong>
+                        <span class="muted"><a class="author-link" href="/user.html?id=${track.author_id}">${escapeHtml(track.author_name || track.artist_name)}</a></span>
+                        <div class="score">${track.total_score}/50</div>
+                    </article>
+                `;
+            }
+
+            return `
+                <article class="nomination-card nomination-card-person">
+                    <span class="eyebrow">${type.label}</span>
+                    <a class="nomination-person" href="/user.html?id=${track.author_id}">
+                        <img class="nomination-avatar" src="${escapeHtml(avatarUrl(track.author_avatar))}" alt="Аватар ${escapeHtml(track.author_name || track.artist_name)}">
+                        <span class="nomination-person-copy">
+                            <strong>${escapeHtml(track.author_name || track.artist_name)}</strong>
+                            <span class="muted">За трек «${escapeHtml(track.title)}»</span>
+                        </span>
+                    </a>
+                    <div class="score">${track.total_score}/50</div>
+                </article>
+            `;
+        }
+
+        function renderPodium(track, index) {
+            const medal = ['1 место', '2 место', '3 место'][index] || `${index + 1} место`;
+            return `
+                <article class="podium-item podium-rank-${index + 1}">
+                    <span class="eyebrow">${medal}</span>
+                    <img class="podium-cover" src="/uploads/${escapeHtml(track.cover_path)}" alt="Обложка ${escapeHtml(track.title)}">
+                    <strong>${escapeHtml(track.title)}</strong>
+                    <span class="muted"><a class="author-link" href="/user.html?id=${track.author_id}">${escapeHtml(track.author_name || track.artist_name)}</a></span>
+                    ${renderNominationBadges(track, '')}
+                    <div class="score">${track.total_score}/50</div>
+                </article>
+            `;
+        }
+
+        function renderRow(track, index) {
+            return `
+                <tr>
+                    <td><span class="score">${index + 1}</span></td>
+                    <td>
+                        <div class="track-head">
+                            <img class="cover" src="/uploads/${escapeHtml(track.cover_path)}" alt="Обложка ${escapeHtml(track.title)}">
+                            <div>
+                                <h3 class="track-title">${escapeHtml(track.title)}</h3>
+                                <div class="track-meta"><a class="author-link" href="/user.html?id=${track.author_id}">${escapeHtml(track.author_name || track.artist_name)}</a> · ${formatDate(track.created_at)}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td><div class="track-badges">${renderNominationBadges(track)}</div></td>
+                    <td>
+                        <div class="muted">
+                            Текст: <strong>${track.lyrics}</strong> ·
+                            Звук: <strong>${track.sound}</strong> ·
+                            Индивидуальность: <strong>${track.individuality}</strong> ·
+                            Структура: <strong>${track.structure}</strong> ·
+                            Вайб: <strong>${track.vibe}</strong>
+                        </div>
+                        <div class="footer-note">${escapeHtml(track.comment || 'Комментарий стримера пока не добавлен.')}</div>
+                    </td>
+                    <td><span class="score">${track.total_score}</span><div class="muted">из 50</div></td>
+                </tr>
+            `;
+        }
+
+        function renderResults(tracks) {
+            const nominationMap = new Map();
+            tracks.forEach((track) => {
+                trackNominationKeys(track).forEach((key) => {
+                    if (!nominationMap.has(key)) {
+                        nominationMap.set(key, track);
+                    }
+                });
+            });
+
+            nominationsRoot.innerHTML = nominationTypes
+                .map((type) => renderNominationCard(type, nominationMap.get(type.key) || null))
+                .join('');
+
+            podiumRoot.innerHTML = tracks.slice(0, 3).map(renderPodium).join('');
+            leaderboardBody.innerHTML = tracks.map(renderRow).join('');
+            applyRevealAnimations(nominationsRoot);
+            applyRevealAnimations(podiumRoot);
+            applyRevealAnimations(document.querySelector('.results-table-panel'));
+        }
+
+        async function loadResults() {
+            try {
+                const tracks = await apiFetch('/api/results');
+                if (!tracks.length) {
+                    nominationsRoot.innerHTML = nominationTypes
+                        .map((type) => renderNominationCard(type, null))
+                        .join('');
+                    podiumRoot.innerHTML = '<div class="empty-state">Пока нет оценённых треков.</div>';
+                    leaderboardBody.innerHTML = '<tr><td colspan="5"><div class="empty-state">Как только появятся первые разборы, здесь соберётся общая таблица.</div></td></tr>';
+                    applyRevealAnimations(nominationsRoot);
+                    applyRevealAnimations(podiumRoot);
+                    applyRevealAnimations(document.querySelector('.results-table-panel'));
+                    return;
+                }
+
+                renderResults(tracks);
+            } catch (error) {
+                nominationsRoot.innerHTML = '<div class="empty-state">Не удалось загрузить номинации.</div>';
+                podiumRoot.innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+                leaderboardBody.innerHTML = '';
+                applyRevealAnimations(nominationsRoot);
+                applyRevealAnimations(podiumRoot);
+                applyRevealAnimations(document.querySelector('.results-table-panel'));
+            }
+        }
+
+        (async () => {
+            const user = await guardPage({
+                activePath: '/results.html',
+                roles: ['author', 'viewer', 'streamer'],
+                requireVerified: true,
+                bannerElement: verifyBanner
+            });
+
+            if (!user) {
+                return;
+            }
+
+            if (!user.verified) {
+                nominationsRoot.innerHTML = nominationTypes
+                    .map((type) => renderNominationCard(type, null))
+                    .join('');
+                podiumRoot.innerHTML = '<div class="empty-state">Подтверди почту, чтобы открыть рейтинг.</div>';
+                leaderboardBody.innerHTML = '';
+                applyRevealAnimations(nominationsRoot);
+                applyRevealAnimations(podiumRoot);
+                applyRevealAnimations(document.querySelector('.results-table-panel'));
+                return;
+            }
+
+            loadResults();
+        })().catch((error) => {
+            nominationsRoot.innerHTML = '<div class="empty-state">Не удалось загрузить номинации.</div>';
+            podiumRoot.innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+            leaderboardBody.innerHTML = '';
+            applyRevealAnimations(nominationsRoot);
+            applyRevealAnimations(podiumRoot);
+            applyRevealAnimations(document.querySelector('.results-table-panel'));
+        });
+    </script>
+</body>
+</html>

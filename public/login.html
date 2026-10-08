@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CHUPEP - Вход и регистрация</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="page-auth">
+    <main class="auth-layout auth-layout-single">
+        <section class="auth-card">
+            <div class="auth-brand">
+                <img class="auth-logo" src="/chupep-logo.jfif" alt="CHUPEP logo">
+            </div>
+
+            <span class="eyebrow">Вход в систему</span>
+            <h2 class="auth-title auth-title-compact">Войти или создать аккаунт</h2>
+
+            <div class="tabs">
+                <button class="tab-btn active" type="button" data-tab-trigger="login">Вход</button>
+                <button class="tab-btn" type="button" data-tab-trigger="register">Регистрация</button>
+            </div>
+
+            <section class="tab-panel active" data-tab-panel="login">
+                <form id="login-form" class="stack">
+                    <div class="field">
+                        <label for="login-email">Email</label>
+                        <input id="login-email" name="email" type="email" required>
+                    </div>
+                    <div class="field">
+                        <label for="login-password">Пароль</label>
+                        <input id="login-password" name="password" type="password" required>
+                    </div>
+                    <button class="full" type="submit">Войти</button>
+                    <button class="auth-link-button" type="button" data-open-tab="forgot-password">Забыли пароль?</button>
+                </form>
+            </section>
+
+            <section class="tab-panel" data-tab-panel="forgot-password">
+                <form id="forgot-password-form" class="stack">
+                    <p class="auth-note">Введи email от аккаунта, и мы отправим ссылку для сброса пароля.</p>
+                    <div class="field">
+                        <label for="forgot-email">Email</label>
+                        <input id="forgot-email" name="email" type="email" required>
+                    </div>
+                    <div class="auth-form-actions">
+                        <button type="submit">Отправить ссылку</button>
+                        <button class="secondary" type="button" data-open-tab="login">Назад ко входу</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="tab-panel" data-tab-panel="register">
+                <form id="register-form" class="stack">
+                    <div class="field">
+                        <label for="register-name">Имя или ник</label>
+                        <input id="register-name" name="displayName" type="text" required>
+                    </div>
+                    <div class="field">
+                        <label for="register-email">Email</label>
+                        <input id="register-email" name="email" type="email" required>
+                    </div>
+                    <div class="field">
+                        <label for="register-password">Пароль</label>
+                        <input id="register-password" name="password" type="password" required>
+                    </div>
+                    <div class="field">
+                        <label for="register-role">Роль</label>
+                        <select id="register-role" name="role">
+                            <option value="author">Автор - загружать треки</option>
+                            <option value="viewer">Слушатель - смотреть рейтинг</option>
+                        </select>
+                    </div>
+                    <button class="full" type="submit">Создать аккаунт</button>
+                </form>
+            </section>
+
+            <div id="auth-message" class="message"></div>
+        </section>
+    </main>
+    <script src="/app.js"></script>
+    <script>
+        const triggers = document.querySelectorAll('[data-tab-trigger]');
+        const panels = document.querySelectorAll('[data-tab-panel]');
+        const tabLinks = document.querySelectorAll('[data-open-tab]');
+        const authMessage = document.getElementById('auth-message');
+
+        function setTab(name, options = {}) {
+            triggers.forEach((button) => {
+                button.classList.toggle('active', button.dataset.tabTrigger === name);
+            });
+            panels.forEach((panel) => {
+                panel.classList.toggle('active', panel.dataset.tabPanel === name);
+            });
+
+            if (!options.preserveMessage) {
+                hideMessage(authMessage);
+            }
+        }
+
+        triggers.forEach((button) => {
+            button.addEventListener('click', () => setTab(button.dataset.tabTrigger));
+        });
+
+        tabLinks.forEach((button) => {
+            button.addEventListener('click', () => setTab(button.dataset.openTab));
+        });
+
+        document.getElementById('login-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            hideMessage(authMessage);
+            const formData = new FormData(event.currentTarget);
+
+            try {
+                const payload = await apiFetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(Object.fromEntries(formData.entries()))
+                });
+
+                showMessage(authMessage, payload.user.verified ? 'success' : 'info', payload.message);
+
+                setTimeout(() => {
+                    window.location.href = userHomePath(payload.user);
+                }, 700);
+            } catch (error) {
+                showMessage(authMessage, 'error', error.message);
+            }
+        });
+
+        document.getElementById('forgot-password-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            hideMessage(authMessage);
+            const form = event.currentTarget;
+            const formData = new FormData(form);
+            const registeredEmail = String(formData.get('email') || '').trim();
+
+            try {
+                const payload = await apiFetch('/api/forgot-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(Object.fromEntries(formData.entries()))
+                });
+
+                const extra = payload.previewUrl
+                    ? `<a href="${payload.previewUrl}" target="_blank" rel="noreferrer">Открыть ссылку для сброса пароля</a>`
+                    : '';
+
+                form.reset();
+                setTab('login', { preserveMessage: true });
+                showMessage(authMessage, 'info', payload.message, extra);
+            } catch (error) {
+                showMessage(authMessage, 'error', error.message);
+            }
+        });
+
+        document.getElementById('register-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+        hideMessage(authMessage);
+        const form = event.currentTarget;
+        const formData = new FormData(form);
+        const registeredEmail = String(formData.get('email') || '').trim();
+
+        try {
+            const payload = await apiFetch('/api/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(Object.fromEntries(formData.entries()))
+                });
+
+                const extra = payload.previewUrl
+                    ? 'Ссылка с подтверждением отправлена на почту.'
+                    : '';
+                showMessage(authMessage, 'success', payload.message, extra);
+                form.reset();
+                setTab('login', { preserveMessage: true });
+                document.getElementById('login-email').value = registeredEmail;
+            } catch (error) {
+                showMessage(authMessage, 'error', error.message);
+            }
+        });
+
+        (async () => {
+            try {
+                const user = await getSession();
+                if (user) {
+                    window.location.href = userHomePath(user);
+                    return;
+                }
+            } catch (_error) {
+                // На странице входа можно игнорировать стартовую ошибку чтения сессии.
+            }
+
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('mode') === 'forgot-password') {
+                setTab('forgot-password', { preserveMessage: true });
+            }
+
+            if (params.get('verified') === '1') {
+                showMessage(authMessage, 'success', 'Почта подтверждена. Можно входить.');
+            } else if (params.get('verified') === '0') {
+                showMessage(authMessage, 'error', 'Ссылка подтверждения недействительна или уже устарела.');
+            } else if (params.get('passwordReset') === '1') {
+                showMessage(authMessage, 'success', 'Пароль обновлен. Теперь можно войти с новым паролем.');
+            }
+        })();
+    </script>
+</body>
+</html>

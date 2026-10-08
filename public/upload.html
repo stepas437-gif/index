@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CHUPEP - Загрузка трека</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="page-upload protected-page">
+    <div class="shell">
+        <header class="topbar">
+            <div class="brand">
+                <div class="brand-badge">
+                    <img class="brand-logo" src="/chupep-logo.jfif" alt="CHUPEP logo">
+                </div>
+                <div class="brand-copy">
+                    <h1>CHUPEP</h1>
+                    <p>Оценка треков</p>
+                </div>
+            </div>
+            <nav class="nav" data-nav></nav>
+            <div class="topbar-actions" data-actions></div>
+        </header>
+
+        <div class="page-head">
+            <div class="section-title">
+                <span class="eyebrow">Загрузка треков</span>
+                <h2>Загрузи трек</h2>
+                <p>После отправки трек попадёт в очередь на разбор. Потом здесь же появятся статус, оценка и номинация.</p>
+            </div>
+
+            <aside class="page-note">
+                <span class="eyebrow">Перед загрузкой</span>
+                <ul class="bullet-list">
+                    <li>Укажи название трека.</li>
+                    <li>Загрузи аудио и обложку.</li>
+                    <li>Если нужно, добавь короткий комментарий для стрима.</li>
+                </ul>
+            </aside>
+        </div>
+
+        <div id="verify-banner" class="message"></div>
+
+        <section class="dashboard-grid">
+            <article class="glass-panel panel">
+                <h3>Новый релиз</h3>
+                <p id="upload-hint" class="panel-subtitle">Имя автора подставляется из профиля.</p>
+                <form id="upload-form" class="stack" enctype="multipart/form-data">
+                    <div class="field">
+                        <label for="track-title">Название трека</label>
+                        <input id="track-title" name="title" type="text" required>
+                    </div>
+                    <div class="field">
+                        <label for="track-notes">Комментарий к релизу</label>
+                        <textarea id="track-notes" name="notes" placeholder="Что важно услышать стримеру: настроение, идея, референсы, на что обратить внимание"></textarea>
+                    </div>
+                    <div class="field">
+                        <label for="audio-file">Аудио</label>
+                        <input id="audio-file" name="audio" type="file" accept="audio/*" required>
+                    </div>
+                    <div class="field">
+                        <label for="cover-file">Обложка</label>
+                        <input id="cover-file" name="cover" type="file" accept="image/*" required>
+                    </div>
+                    <button class="full" type="submit">Отправить на разбор</button>
+                </form>
+                <div id="upload-message" class="message"></div>
+            </article>
+
+            <article class="glass-panel panel">
+                <h3>Лента отправленных треков</h3>
+                <p class="panel-subtitle">Здесь видны все загрузки, оценки и назначенные номинации.</p>
+                <div id="my-tracks" class="list"></div>
+            </article>
+        </section>
+
+        <footer class="site-footer"></footer>
+    </div>
+
+    <script src="/app.js"></script>
+    <script>
+        const verifyBanner = document.getElementById('verify-banner');
+        const uploadMessage = document.getElementById('upload-message');
+        const tracksContainer = document.getElementById('my-tracks');
+        const uploadHint = document.getElementById('upload-hint');
+        const uploadForm = document.getElementById('upload-form');
+        let trackCommentsByTrackId = new Map();
+
+        function renderNominationBadges(track) {
+            const keys = trackNominationKeys(track);
+            if (!keys.length) {
+                return '';
+            }
+
+            return keys
+                .map((key) => `<span class="nomination-badge">${escapeHtml(nominationLabel(key))}</span>`)
+                .join('');
+        }
+
+        function commentsForTrack(trackId) {
+            return trackCommentsByTrackId.get(Number(trackId)) || [];
+        }
+
+        function setUploadEnabled(enabled) {
+            uploadForm.querySelectorAll('input, textarea, button').forEach((element) => {
+                element.disabled = !enabled;
+            });
+        }
+
+        function renderTrackCard(track) {
+            const score = track.lyrics
+                ? `${track.lyrics + track.sound + track.individuality + track.structure + track.vibe}/50`
+                : 'Ещё не разобран';
+
+            return `
+                <article class="track-card">
+                    <div class="track-head">
+                        <img class="cover" src="/uploads/${escapeHtml(track.cover_path)}" alt="Обложка ${escapeHtml(track.title)}">
+                        <div>
+                            <h4 class="track-title">${escapeHtml(track.title)}</h4>
+                            <div class="track-meta">${escapeHtml(track.artist_name)} · ${formatDate(track.created_at)}</div>
+                            <div class="track-badges">
+                                <span class="status-badge ${track.status === 'evaluated' ? 'status-evaluated' : 'status-new'}">
+                                    ${statusLabel(track.status)}
+                                </span>
+                                ${renderNominationBadges(track)}
+                            </div>
+                        </div>
+                    </div>
+                    <audio class="audio" id="audio-track-${track.id}" controls src="/uploads/${escapeHtml(track.file_path)}"></audio>
+                    <p class="muted">${escapeHtml(track.notes || 'Комментарий к треку не добавлен.')}</p>
+                    <div class="mini-card">
+                        <strong>${score}</strong>
+                        <span>
+                            ${track.comment ? `Комментарий стримера: ${escapeHtml(track.comment)}` : 'Комментарий стримера появится после разбора.'}
+                        </span>
+                    </div>
+                    ${trackCommentBoardMarkup(track.id, commentsForTrack(track.id))}
+                </article>
+            `;
+        }
+
+        async function loadMyTracks() {
+            try {
+                const tracks = await apiFetch('/api/my-tracks');
+                trackCommentsByTrackId = await loadTrackCommentsMap(tracks.map((track) => track.id));
+
+                if (!tracks.length) {
+                    tracksContainer.innerHTML = '<div class="empty-state">Пока пусто. Загрузи первый трек, и он появится здесь.</div>';
+                    applyRevealAnimations(tracksContainer);
+                    return;
+                }
+
+                tracksContainer.innerHTML = tracks.map(renderTrackCard).join('');
+                bindTrackCommentBoards(tracksContainer);
+                applyRevealAnimations(tracksContainer);
+            } catch (error) {
+                tracksContainer.innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+                applyRevealAnimations(tracksContainer);
+            }
+        }
+
+        uploadForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            hideMessage(uploadMessage);
+            const form = event.currentTarget;
+
+            const formData = new FormData(event.currentTarget);
+            try {
+                const payload = await apiFetch('/api/tracks', {
+                    method: 'POST',
+                    body: formData
+                });
+                showMessage(uploadMessage, 'success', payload.message);
+                form.reset();
+                await loadMyTracks();
+            } catch (error) {
+                showMessage(uploadMessage, 'error', error.message);
+            }
+        });
+
+        (async () => {
+            const user = await guardPage({
+                activePath: '/upload.html',
+                roles: ['author', 'streamer'],
+                requireVerified: true,
+                bannerElement: verifyBanner
+            });
+
+            if (!user) {
+                return;
+            }
+
+            uploadHint.textContent = `Автор релиза: ${user.displayName}. Имя берётся из профиля автоматически.`;
+
+            if (!user.verified) {
+                setUploadEnabled(false);
+                tracksContainer.innerHTML = '<div class="empty-state">Подтверди почту, чтобы загружать треки и видеть историю отправок.</div>';
+                applyRevealAnimations(tracksContainer);
+                return;
+            }
+
+            setUploadEnabled(true);
+            await loadMyTracks();
+        })().catch((error) => {
+            tracksContainer.innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+            applyRevealAnimations(tracksContainer);
+        });
+    </script>
+</body>
+</html>

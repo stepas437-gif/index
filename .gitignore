@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+
+node_modules/
+npm-debug.log*
+
+# Persistent application data. Transfer these to the VPS separately.
+music.db
+music.db-*
+uploads/*
+!uploads/.gitkeep
+
+# Local logs and OS files
+*.log
+.DS_Store

@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CHUPEP - Стримерская</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="page-admin">
+    <div class="shell">
+        <header class="topbar">
+            <div class="brand">
+                <div class="brand-badge">
+                    <img class="brand-logo" src="/chupep-logo.jfif" alt="CHUPEP logo">
+                </div>
+                <div class="brand-copy">
+                    <h1>CHUPEP</h1>
+                    <p>Треки и разбор</p>
+                </div>
+            </div>
+            <nav class="nav" data-nav></nav>
+            <div class="topbar-actions" data-actions></div>
+        </header>
+
+        <div class="page-head page-head-single">
+            <div class="section-title section-title-compact">
+                <h2>Очередь на разбор</h2>
+            </div>
+        </div>
+
+        <div id="verify-banner" class="message"></div>
+
+        <section class="glass-panel panel nomination-control-panel">
+            <div class="nomination-control-head">
+                <div>
+                    <span class="eyebrow" style="margin-bottom: 20px;">Номинации месяца</span>
+                    <h3>Отметки по трекам</h3>
+                    <p class="panel-subtitle">Все три номинации отмечаются прямо в карточке трека. Если включить галочку на другом треке, предыдущая отметка снимется автоматически.</p>
+                </div>
+                <button id="clear-nominations" class="secondary" type="button">Очистить номинации месяца</button>
+            </div>
+            <div id="nomination-message" class="message"></div>
+        </section>
+
+        <section class="glass-panel panel queue-panel">
+            <div class="queue-toolbar">
+                <div class="field queue-search-field">
+                    <label for="queue-search">Поиск по очереди</label>
+                    <input id="queue-search" type="search" placeholder="Название трека, артист или автор загрузки" autocomplete="off" spellcheck="false">
+                </div>
+                <div id="queue-search-meta" class="queue-search-meta">Показаны все треки.</div>
+            </div>
+            <div id="queue" class="list"></div>
+            <details id="queue-archive" class="queue-archive">
+                <summary class="queue-archive-summary">
+                    <span>Архив разобранных треков</span>
+                    <span id="archive-count" class="queue-archive-count">0</span>
+                </summary>
+                <div id="archive" class="list"></div>
+            </details>
+        </section>
+
+        <footer class="site-footer"></footer>
+    </div>
+
+    <script src="/app.js"></script>
+    <script>
+        const queue = document.getElementById('queue');
+        const archive = document.getElementById('archive');
+        const archivePanel = document.getElementById('queue-archive');
+        const archiveCount = document.getElementById('archive-count');
+        const queueSearch = document.getElementById('queue-search');
+        const queueSearchMeta = document.getElementById('queue-search-meta');
+        const verifyBanner = document.getElementById('verify-banner');
+        const nominationMessage = document.getElementById('nomination-message');
+        const clearNominationsButton = document.getElementById('clear-nominations');
+        let trackCommentsByTrackId = new Map();
+        let queueTracks = [];
+
+        function sliderMarkup(key, label, value = 5) {
+            return `
+                <div class="slider-box">
+                    <label for="${key}">
+                        <span>${label}</span>
+                        <strong data-score="${key}">${value}</strong>
+                    </label>
+                    <input id="${key}" name="${key}" type="range" min="1" max="10" value="${value}">
+                </div>
+            `;
+        }
+
+        function scoreValue(value) {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) && parsed >= 1 && parsed <= 10 ? parsed : 5;
+        }
+
+        function nominationToggleMarkup(track, key, label) {
+            return `
+                <label class="toggle-card toggle-card-highlight" for="${key}-${track.id}">
+                    <input id="${key}-${track.id}" type="checkbox" ${isNominationSelected(track[key]) ? 'checked' : ''}>
+                    <span>${label}</span>
+                </label>
+            `;
+        }
+
+        function commentsForTrack(trackId) {
+            return trackCommentsByTrackId.get(Number(trackId)) || [];
+        }
+
+        function normalizeSearchValue(value) {
+            return String(value || '').trim().toLocaleLowerCase('ru-RU');
+        }
+
+        function queueTrackMatches(track, query) {
+            if (!query) {
+                return true;
+            }
+
+            const haystack = [
+                track.title,
+                track.artist_name,
+                track.author_name,
+                track.notes,
+                track.comment
+            ]
+                .map(normalizeSearchValue)
+                .join(' ');
+
+            return haystack.includes(query);
+        }
+
+        function filteredQueueTracks() {
+            const query = normalizeSearchValue(queueSearch.value);
+            return queueTracks.filter((track) => queueTrackMatches(track, query));
+        }
+
+        function updateQueueSearchMeta(visibleCount, totalCount) {
+            const query = normalizeSearchValue(queueSearch.value);
+
+            if (!totalCount) {
+                queueSearchMeta.textContent = 'Очередь пока пустая.';
+                return;
+            }
+
+            if (!query) {
+                queueSearchMeta.textContent = `Показаны все треки: ${totalCount}`;
+                return;
+            }
+
+            if (!visibleCount) {
+                queueSearchMeta.textContent = 'По этому запросу ничего не найдено.';
+                return;
+            }
+
+            queueSearchMeta.textContent = `Найдено ${visibleCount} из ${totalCount}.`;
+        }
+
+        function renderTrack(track) {
+            const actionLabel = track.status === 'evaluated' ? 'Обновить оценку' : 'Сохранить оценку';
+
+            return `
+                <article class="track-card" id="track-${track.id}">
+                    <div class="track-head">
+                        <img class="cover" src="/uploads/${escapeHtml(track.cover_path)}" alt="Обложка ${escapeHtml(track.title)}">
+                        <div>
+                            <h3 class="track-title">${escapeHtml(track.title)}</h3>
+                            <div class="track-meta">${escapeHtml(track.artist_name)} · загрузил <a class="author-link" href="/user.html?id=${track.author_id}">${escapeHtml(track.author_name)}</a> · ${formatDate(track.created_at)}</div>
+                            <div class="track-badges">
+                                <span class="status-badge ${track.status === 'evaluated' ? 'status-evaluated' : 'status-new'}">
+                                    ${statusLabel(track.status)}
+                                </span>
+                            </div>
+                            <p class="muted">${escapeHtml(track.notes || 'Автор не оставил комментарий к релизу.')}</p>
+                        </div>
+                    </div>
+                    <audio class="audio" id="audio-track-${track.id}" controls src="/uploads/${escapeHtml(track.file_path)}"></audio>
+                    ${trackCommentBoardMarkup(track.id, commentsForTrack(track.id), { editable: true })}
+                    <div class="rating-grid">
+                        ${sliderMarkup(`lyrics-${track.id}`, 'Текст и рифмы', scoreValue(track.lyrics))}
+                        ${sliderMarkup(`sound-${track.id}`, 'Продакшн и звук', scoreValue(track.sound))}
+                        ${sliderMarkup(`individuality-${track.id}`, 'Индивидуальность', scoreValue(track.individuality))}
+                        ${sliderMarkup(`structure-${track.id}`, 'Структура', scoreValue(track.structure))}
+                        ${sliderMarkup(`vibe-${track.id}`, 'Вайб', scoreValue(track.vibe))}
+                    </div>
+                    <div class="nomination-editor">
+                        <span class="nomination-editor-title">Номинации месяца</span>
+                        <div class="nomination-toggle-grid">
+                            ${nominationToggleMarkup(track, 'best_track', 'Лучший трек')}
+                            ${nominationToggleMarkup(track, 'best_producer', 'Лучший продюсер')}
+                            ${nominationToggleMarkup(track, 'best_artist', 'Лучший артист')}
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="comment-${track.id}">Комментарий стримера</label>
+                        <textarea id="comment-${track.id}" placeholder="Короткая обратная связь для автора">${escapeHtml(track.comment || '')}</textarea>
+                    </div>
+                    <button type="button" onclick="saveEvaluation(${track.id})">${actionLabel}</button>
+                </article>
+            `;
+        }
+
+        async function saveTrackMomentComment({ trackId, timestampSeconds, body }) {
+            await apiFetch('/api/track-comments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ trackId, timestampSeconds, body })
+            });
+
+            await loadQueue();
+        }
+
+        function bindQueueRangeInputs() {
+            queue.querySelectorAll('input[type="range"]').forEach((slider) => {
+                slider.addEventListener('input', () => {
+                    const score = slider.parentElement.querySelector('[data-score]');
+                    if (score) {
+                        score.textContent = slider.value;
+                    }
+                });
+            });
+        }
+
+        function renderQueue() {
+            const visibleTracks = filteredQueueTracks();
+            clearNominationsButton.disabled = !queueTracks.length;
+            queueSearch.disabled = !queueTracks.length;
+            updateQueueSearchMeta(visibleTracks.length, queueTracks.length);
+
+            if (!queueTracks.length) {
+                queue.innerHTML = '<div class="empty-state">Треки пока не загружены.</div>';
+                applyRevealAnimations(queue);
+                return;
+            }
+
+            if (!visibleTracks.length) {
+                queue.innerHTML = `<div class="empty-state">По запросу «${escapeHtml(queueSearch.value.trim())}» ничего не найдено.</div>`;
+                applyRevealAnimations(queue);
+                return;
+            }
+
+            queue.innerHTML = visibleTracks.map(renderTrack).join('');
+            bindQueueRangeInputs();
+            bindTrackCommentBoards(queue, { onSubmit: saveTrackMomentComment });
+            applyRevealAnimations(queue);
+        }
+
+        function splitTracksByStatus(tracks) {
+            return {
+                pending: tracks.filter((track) => track.status !== 'evaluated'),
+                archived: tracks.filter((track) => track.status === 'evaluated')
+            };
+        }
+
+        function updateQueueSearchMeta(visibleTracks, totalCount) {
+            const query = normalizeSearchValue(queueSearch.value);
+            const total = splitTracksByStatus(queueTracks);
+            const visible = splitTracksByStatus(Array.isArray(visibleTracks) ? visibleTracks : []);
+
+            if (!totalCount) {
+                queueSearchMeta.textContent = 'Очередь пока пустая.';
+                return;
+            }
+
+            if (!query) {
+                queueSearchMeta.textContent = `На разборе: ${total.pending.length}. В архиве: ${total.archived.length}.`;
+                return;
+            }
+
+            if (!visibleTracks.length) {
+                queueSearchMeta.textContent = 'По этому запросу ничего не найдено.';
+                return;
+            }
+
+            queueSearchMeta.textContent = `Найдено ${visibleTracks.length}: на разборе ${visible.pending.length}, в архиве ${visible.archived.length}.`;
+        }
+
+        function renderTrackList(root, tracks, emptyText) {
+            root.innerHTML = tracks.length ? tracks.map(renderTrack).join('') : `<div class="empty-state">${emptyText}</div>`;
+        }
+
+        function bindQueueInteractiveControls() {
+            [queue, archive].forEach((root) => {
+                root.querySelectorAll('input[type="range"]').forEach((slider) => {
+                    slider.addEventListener('input', () => {
+                        const score = slider.parentElement.querySelector('[data-score]');
+                        if (score) {
+                            score.textContent = slider.value;
+                        }
+                    });
+                });
+
+                bindTrackCommentBoards(root, { onSubmit: saveTrackMomentComment });
+            });
+        }
+
+        function renderQueue() {
+            const visibleTracks = filteredQueueTracks();
+            const total = splitTracksByStatus(queueTracks);
+            const visible = splitTracksByStatus(visibleTracks);
+            const query = normalizeSearchValue(queueSearch.value);
+
+            clearNominationsButton.disabled = !total.archived.length;
+            queueSearch.disabled = !queueTracks.length;
+            updateQueueSearchMeta(visibleTracks, queueTracks.length);
+
+            renderTrackList(
+                queue,
+                visible.pending,
+                query
+                    ? `По запросу «${escapeHtml(queueSearch.value.trim())}» новых треков не найдено.`
+                    : 'Новых треков на разбор пока нет.'
+            );
+
+            archivePanel.hidden = !total.archived.length;
+            archiveCount.textContent = total.archived.length
+                ? query
+                    ? `${visible.archived.length}/${total.archived.length}`
+                    : String(total.archived.length)
+                : '0';
+
+            if (!archivePanel.hidden) {
+                renderTrackList(
+                    archive,
+                    visible.archived,
+                    query
+                        ? `По запросу «${escapeHtml(queueSearch.value.trim())}» в архиве ничего не найдено.`
+                        : 'Архив пока пуст.'
+                );
+
+                if (query && visible.archived.length) {
+                    archivePanel.open = true;
+                }
+            } else {
+                archive.innerHTML = '';
+                archivePanel.open = false;
+            }
+
+            bindQueueInteractiveControls();
+            applyRevealAnimations(queue);
+            applyRevealAnimations(archivePanel);
+        }
+
+        async function loadQueue() {
+            try {
+                queueTracks = await apiFetch('/api/admin/tracks');
+                trackCommentsByTrackId = await loadTrackCommentsMap(queueTracks.map((track) => track.id));
+                renderQueue();
+            } catch (error) {
+                queueTracks = [];
+                queueSearch.disabled = true;
+                updateQueueSearchMeta(0, 0);
+                queue.innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+                archive.innerHTML = '';
+                archivePanel.hidden = true;
+                archivePanel.open = false;
+                archiveCount.textContent = '0';
+                applyRevealAnimations(queue);
+            }
+        }
+
+        async function saveEvaluation(trackId) {
+            const root = document.getElementById(`track-${trackId}`);
+            const payload = {
+                trackId,
+                lyrics: Number(root.querySelector(`#lyrics-${trackId}`).value),
+                sound: Number(root.querySelector(`#sound-${trackId}`).value),
+                individuality: Number(root.querySelector(`#individuality-${trackId}`).value),
+                structure: Number(root.querySelector(`#structure-${trackId}`).value),
+                vibe: Number(root.querySelector(`#vibe-${trackId}`).value),
+                best_track: root.querySelector(`#best_track-${trackId}`).checked,
+                best_producer: root.querySelector(`#best_producer-${trackId}`).checked,
+                best_artist: root.querySelector(`#best_artist-${trackId}`).checked,
+                comment: root.querySelector(`#comment-${trackId}`).value.trim()
+            };
+
+            try {
+                await apiFetch('/api/evaluate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                hideMessage(nominationMessage);
+                await loadQueue();
+            } catch (error) {
+                window.alert(error.message);
+            }
+        }
+
+        async function clearNominations() {
+            try {
+                const response = await apiFetch('/api/admin/nominations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ clear: true })
+                });
+
+                showMessage(nominationMessage, 'success', response.message);
+                await loadQueue();
+            } catch (error) {
+                showMessage(nominationMessage, 'error', error.message);
+            }
+        }
+
+        window.saveEvaluation = saveEvaluation;
+        clearNominationsButton.addEventListener('click', clearNominations);
+        queueSearch.addEventListener('input', renderQueue);
+
+        (async () => {
+            const user = await guardPage({
+                activePath: '/admin.html',
+                roles: ['streamer'],
+                requireVerified: true,
+                bannerElement: verifyBanner
+            });
+
+            if (!user) {
+                return;
+            }
+
+            if (!user.verified) {
+                queue.innerHTML = '<div class="empty-state">Подтверди почту, чтобы видеть очередь треков и сохранять оценки.</div>';
+                clearNominationsButton.disabled = true;
+                queueSearch.disabled = true;
+                updateQueueSearchMeta(0, 0);
+                applyRevealAnimations(queue);
+                return;
+            }
+
+            await loadQueue();
+        })().catch((error) => {
+            queueSearch.disabled = true;
+            updateQueueSearchMeta(0, 0);
+            queue.innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+            applyRevealAnimations(queue);
+        });
+    </script>
+</body>
+</html>
