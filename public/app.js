@@ -324,7 +324,7 @@ async function logout() {
 }
 
 function avatarUrl(path) {
-    return path ? `/uploads/${encodeURIComponent(path)}` : '/chupep-logo.jfif';
+    return path ? `/uploads/${encodeURIComponent(path)}` : '/default-avatar.svg';
 }
 
 function ensureFavicon() {
