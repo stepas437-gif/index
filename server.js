@@ -19,21 +19,51 @@ const SECURE_COOKIES = process.env.COOKIE_SECURE === 'true' || BASE_URL.startsWi
 const BODY_LIMIT = '256kb';
 const APP_ORIGIN = getBaseOrigin(BASE_URL);
 const SAFE_HTTP_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
-const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
-const ALLOWED_AUDIO_MIME_TYPES = new Set([
-    'audio/mpeg',
-    'audio/mp3',
-    'audio/wav',
-    'audio/wave',
-    'audio/x-wav',
-    'audio/ogg',
-    'audio/mp4',
-    'audio/x-m4a',
-    'audio/aac',
-    'audio/x-aac'
+const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif', '.heic', '.heif']);
+const ALLOWED_AUDIO_EXTENSIONS = new Set([
+    '.mp3',
+    '.mp2',
+    '.mpga',
+    '.wav',
+    '.wave',
+    '.ogg',
+    '.oga',
+    '.opus',
+    '.m4a',
+    '.m4b',
+    '.m4p',
+    '.m4r',
+    '.mp4',
+    '.aac',
+    '.adts',
+    '.flac',
+    '.ape',
+    '.wv',
+    '.tta',
+    '.tak',
+    '.shn',
+    '.aif',
+    '.aiff',
+    '.aifc',
+    '.amr',
+    '.ac3',
+    '.eac3',
+    '.dts',
+    '.dsf',
+    '.dff',
+    '.voc',
+    '.au',
+    '.snd',
+    '.mid',
+    '.midi',
+    '.3gp',
+    '.3gpp',
+    '.webm',
+    '.mka',
+    '.caf',
+    '.wma',
+    '.ra'
 ]);
-const ALLOWED_AUDIO_EXTENSIONS = new Set(['.mp3', '.wav', '.ogg', '.m4a', '.aac']);
 const DATA_DIR = path.resolve(process.env.DATA_DIR || __dirname);
 const DB_PATH = path.resolve(process.env.DB_PATH || path.join(DATA_DIR, 'music.db'));
 const uploadDir = path.resolve(process.env.UPLOAD_DIR || path.join(DATA_DIR, 'uploads'));
@@ -357,17 +387,123 @@ function isMp4AudioBuffer(buffer) {
     return buffer.length >= 12 && buffer.toString('ascii', 4, 8) === 'ftyp';
 }
 
+function isHeifBuffer(buffer) {
+    if (!isMp4AudioBuffer(buffer)) {
+        return false;
+    }
+
+    const brand = buffer.toString('ascii', 8, 12).toLowerCase();
+    return new Set(['heic', 'heix', 'hevc', 'hevx', 'heif', 'heis', 'mif1', 'msf1', 'avif', 'avis']).has(brand);
+}
+
 function isAacBuffer(buffer) {
     return buffer.length >= 2 && buffer[0] === 0xff && (buffer[1] & 0xf6) === 0xf0;
 }
 
+function isFlacBuffer(buffer) {
+    return buffer.length >= 4 && buffer.toString('ascii', 0, 4) === 'fLaC';
+}
+
+function isAc3Buffer(buffer) {
+    return buffer.length >= 2 && buffer[0] === 0x0b && buffer[1] === 0x77;
+}
+
+function isDtsBuffer(buffer) {
+    return (
+        (buffer.length >= 4 && bufferStartsWith(buffer, [0x7f, 0xfe, 0x80, 0x01])) ||
+        (buffer.length >= 4 && bufferStartsWith(buffer, [0x1f, 0xff, 0xe8, 0x00]))
+    );
+}
+
+function isDsdBuffer(buffer) {
+    return (
+        (buffer.length >= 4 && buffer.toString('ascii', 0, 4) === 'DSD ') ||
+        (buffer.length >= 4 && buffer.toString('ascii', 0, 4) === 'FRM8')
+    );
+}
+
+function isApeBuffer(buffer) {
+    return buffer.length >= 4 && buffer.toString('ascii', 0, 4) === 'MAC ';
+}
+
+function isWavPackBuffer(buffer) {
+    return buffer.length >= 4 && buffer.toString('ascii', 0, 4) === 'wvpk';
+}
+
+function isAuBuffer(buffer) {
+    return buffer.length >= 4 && buffer.toString('ascii', 0, 4) === '.snd';
+}
+
+function isVocBuffer(buffer) {
+    return buffer.length >= 19 && buffer.toString('ascii', 0, 19) === 'Creative Voice File';
+}
+
+function isMidiBuffer(buffer) {
+    return buffer.length >= 4 && buffer.toString('ascii', 0, 4) === 'MThd';
+}
+
+function isAiffBuffer(buffer) {
+    return (
+        buffer.length >= 12 &&
+        buffer.toString('ascii', 0, 4) === 'FORM' &&
+        ['AIFF', 'AIFC'].includes(buffer.toString('ascii', 8, 12))
+    );
+}
+
+function isAmrBuffer(buffer) {
+    return buffer.length >= 6 && buffer.toString('ascii', 0, 6) === '#!AMR\n';
+}
+
+function isMatroskaBuffer(buffer) {
+    return buffer.length >= 4 && bufferStartsWith(buffer, [0x1a, 0x45, 0xdf, 0xa3]);
+}
+
+function isCafBuffer(buffer) {
+    return buffer.length >= 4 && buffer.toString('ascii', 0, 4) === 'caff';
+}
+
+function isWmaBuffer(buffer) {
+    return (
+        buffer.length >= 16 &&
+        bufferStartsWith(buffer, [0x30, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11, 0xa6, 0xd9, 0x00, 0xaa, 0x00, 0x62, 0xce, 0x6c])
+    );
+}
+
+function isRealAudioBuffer(buffer) {
+    return (
+        (buffer.length >= 3 && buffer.toString('ascii', 0, 3) === '.ra') ||
+        (buffer.length >= 4 && buffer.toString('ascii', 0, 4) === '.RMF')
+    );
+}
+
 function matchesFileSignature(kind, buffer) {
     if (kind === 'image') {
-        return isJpegBuffer(buffer) || isPngBuffer(buffer) || isGifBuffer(buffer) || isWebpBuffer(buffer);
+        return isJpegBuffer(buffer) || isPngBuffer(buffer) || isGifBuffer(buffer) || isWebpBuffer(buffer) || isHeifBuffer(buffer);
     }
 
     if (kind === 'audio') {
-        return isMp3Buffer(buffer) || isWavBuffer(buffer) || isOggBuffer(buffer) || isMp4AudioBuffer(buffer) || isAacBuffer(buffer);
+        return (
+            isMp3Buffer(buffer) ||
+            isWavBuffer(buffer) ||
+            isOggBuffer(buffer) ||
+            isMp4AudioBuffer(buffer) ||
+            isAacBuffer(buffer) ||
+            isFlacBuffer(buffer) ||
+            isAc3Buffer(buffer) ||
+            isDtsBuffer(buffer) ||
+            isDsdBuffer(buffer) ||
+            isApeBuffer(buffer) ||
+            isWavPackBuffer(buffer) ||
+            isAiffBuffer(buffer) ||
+            isAmrBuffer(buffer) ||
+            isAuBuffer(buffer) ||
+            isVocBuffer(buffer) ||
+            isMidiBuffer(buffer) ||
+            isMatroskaBuffer(buffer) ||
+            isCafBuffer(buffer) ||
+            isWmaBuffer(buffer) ||
+            isRealAudioBuffer(buffer)
+        );
     }
 
     return false;
@@ -421,20 +557,36 @@ function cleanupUploadedFiles(payload) {
     }
 }
 
+function removeTrackFiles(track) {
+    for (const filename of [track?.file_path, track?.cover_path]) {
+        if (!filename) {
+            continue;
+        }
+
+        try {
+            const filePath = path.join(uploadDir, path.basename(filename));
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+            }
+        } catch (_error) {
+            // The database record is still removed if an old upload cannot be deleted.
+        }
+    }
+}
+
 function validateStoredUpload(file, kind) {
     if (!file || !file.path) {
         return false;
     }
 
-    const mimeType = String(file.mimetype || '').toLowerCase();
     const extension = getFileExtension(file.originalname || file.filename);
 
     if (kind === 'image') {
-        if (!ALLOWED_IMAGE_MIME_TYPES.has(mimeType) || !ALLOWED_IMAGE_EXTENSIONS.has(extension)) {
+        if (!ALLOWED_IMAGE_EXTENSIONS.has(extension)) {
             return false;
         }
     } else if (kind === 'audio') {
-        if (!ALLOWED_AUDIO_MIME_TYPES.has(mimeType) || !ALLOWED_AUDIO_EXTENSIONS.has(extension)) {
+        if (!ALLOWED_AUDIO_EXTENSIONS.has(extension)) {
             return false;
         }
     } else {
@@ -1097,15 +1249,12 @@ const upload = multer({
         fileSize: 25 * 1024 * 1024
     },
     fileFilter: (_req, file, callback) => {
-        const mimeType = String(file.mimetype || '').toLowerCase();
         const extension = getFileExtension(file.originalname);
         const isAudio =
             file.fieldname === 'audio' &&
-            ALLOWED_AUDIO_MIME_TYPES.has(mimeType) &&
             ALLOWED_AUDIO_EXTENSIONS.has(extension);
         const isImage =
             file.fieldname === 'cover' &&
-            ALLOWED_IMAGE_MIME_TYPES.has(mimeType) &&
             ALLOWED_IMAGE_EXTENSIONS.has(extension);
         if (isAudio || isImage) {
             callback(null, true);
@@ -1122,9 +1271,8 @@ const avatarUpload = multer({
         fileSize: 8 * 1024 * 1024
     },
     fileFilter: (_req, file, callback) => {
-        const mimeType = String(file.mimetype || '').toLowerCase();
         const extension = getFileExtension(file.originalname);
-        if (ALLOWED_IMAGE_MIME_TYPES.has(mimeType) && ALLOWED_IMAGE_EXTENSIONS.has(extension)) {
+        if (ALLOWED_IMAGE_EXTENSIONS.has(extension)) {
             callback(null, true);
             return;
         }
@@ -1864,6 +2012,50 @@ app.get('/api/my-tracks', requireVerified, requireRole(['author', 'streamer']), 
     }
 });
 
+async function deleteTrackHandler(req, res, next) {
+    try {
+        const trackId = Number(req.params.id);
+        if (!Number.isInteger(trackId) || trackId <= 0) {
+            res.status(400).json({ error: 'Некорректный трек.' });
+            return;
+        }
+
+        const track = await dbGet(
+            'SELECT id, user_id, file_path, cover_path FROM tracks WHERE id = ?',
+            [trackId]
+        );
+        if (!track) {
+            res.status(404).json({ error: 'Трек уже удалён или не найден.' });
+            return;
+        }
+
+        const isStreamer = req.user.role === 'streamer';
+        if (!isStreamer && track.user_id !== req.user.id) {
+            res.status(403).json({ error: 'Удалять можно только свои треки.' });
+            return;
+        }
+
+        await dbRun('BEGIN TRANSACTION');
+        try {
+            await dbRun('DELETE FROM track_comments WHERE track_id = ?', [trackId]);
+            await dbRun('DELETE FROM evaluations WHERE track_id = ?', [trackId]);
+            await dbRun('DELETE FROM tracks WHERE id = ?', [trackId]);
+            await dbRun('COMMIT');
+        } catch (error) {
+            await dbRun('ROLLBACK');
+            throw error;
+        }
+
+        removeTrackFiles(track);
+        res.json({ message: 'Трек удалён.' });
+    } catch (error) {
+        next(error);
+    }
+}
+
+app.delete('/api/tracks/:id', requireVerified, requireRole(['author', 'streamer']), deleteTrackHandler);
+app.post('/api/tracks/:id/delete', requireVerified, requireRole(['author', 'streamer']), deleteTrackHandler);
+
 app.get('/api/admin/tracks', requireVerified, requireRole(['streamer']), async (req, res, next) => {
     try {
         const rows = await dbAll(
@@ -2204,6 +2396,11 @@ app.use((error, req, res, _next) => {
     console.error(error);
     if (error instanceof multer.MulterError) {
         res.status(400).json({ error: `Ошибка загрузки файла: ${error.message}` });
+        return;
+    }
+
+    if (error && /поддерживаются только аудио-файлы и изображения|для аватарки подходит только изображение/i.test(error.message || '')) {
+        res.status(400).json({ error: error.message });
         return;
     }
 

@@ -56,11 +56,12 @@
                     </div>
                     <div class="field">
                         <label for="audio-file">Аудио</label>
-                        <input id="audio-file" name="audio" type="file" accept="audio/*" required>
+                        <input id="audio-file" name="audio" type="file" accept="*/*" required>
+                        <span class="field-hint">MP3, WAV, OGG, OPUS, M4A, AAC, FLAC, AIFF, AMR, CAF, WMA и другие.</span>
                     </div>
                     <div class="field">
                         <label for="cover-file">Обложка</label>
-                        <input id="cover-file" name="cover" type="file" accept="image/*" required>
+                        <input id="cover-file" name="cover" type="file" accept="*/*" required>
                     </div>
                     <button class="full" type="submit">Отправить на разбор</button>
                 </form>
@@ -113,7 +114,8 @@
                 : 'Ещё не разобран';
 
             return `
-                <article class="track-card">
+                <article class="track-card" id="my-track-${track.id}">
+                    <button class="track-delete-button" type="button" aria-label="Удалить трек" title="Удалить трек" onclick="deleteMyTrack(${track.id})">×</button>
                     <div class="track-head">
                         <img class="cover" src="/uploads/${escapeHtml(track.cover_path)}" alt="Обложка ${escapeHtml(track.title)}">
                         <div>
@@ -159,6 +161,23 @@
                 applyRevealAnimations(tracksContainer);
             }
         }
+
+        async function deleteMyTrack(trackId) {
+            const card = document.getElementById(`my-track-${trackId}`);
+            const title = card?.querySelector('.track-title')?.textContent?.trim() || 'этот трек';
+            if (!window.confirm(`Удалить трек «${title}» из истории и базы данных?`)) {
+                return;
+            }
+
+            try {
+                await apiFetch(`/api/tracks/${trackId}/delete`, { method: 'POST' });
+                await loadMyTracks();
+            } catch (error) {
+                window.alert(error.message);
+            }
+        }
+
+        window.deleteMyTrack = deleteMyTrack;
 
         uploadForm.addEventListener('submit', async (event) => {
             event.preventDefault();

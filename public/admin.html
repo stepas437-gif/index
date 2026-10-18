@@ -160,6 +160,7 @@
 
             return `
                 <article class="track-card" id="track-${track.id}">
+                    <button class="track-delete-button" type="button" aria-label="Удалить трек" title="Удалить трек" onclick="deleteTrack(${track.id})">×</button>
                     <div class="track-head">
                         <img class="cover" src="/uploads/${escapeHtml(track.cover_path)}" alt="Обложка ${escapeHtml(track.title)}">
                         <div>
@@ -207,6 +208,20 @@
             });
 
             await loadQueue();
+        }
+
+        async function deleteTrack(trackId) {
+            const track = queueTracks.find((item) => Number(item.id) === Number(trackId));
+            if (!track || !window.confirm(`Удалить трек «${track.title}» из очереди и базы данных?`)) {
+                return;
+            }
+
+            try {
+                await apiFetch(`/api/tracks/${trackId}/delete`, { method: 'POST' });
+                await loadQueue();
+            } catch (error) {
+                window.alert(error.message);
+            }
         }
 
         function bindQueueRangeInputs() {
@@ -402,6 +417,7 @@
         }
 
         window.saveEvaluation = saveEvaluation;
+        window.deleteTrack = deleteTrack;
         clearNominationsButton.addEventListener('click', clearNominations);
         queueSearch.addEventListener('input', renderQueue);
 

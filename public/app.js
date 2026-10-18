@@ -214,7 +214,7 @@ async function apiFetch(url, options = {}) {
     }
 
     if (!response.ok) {
-        throw new Error(payload && payload.error ? payload.error : 'Запрос не выполнен.');
+        throw new Error(payload && payload.error ? payload.error : `Запрос не выполнен (HTTP ${response.status}).`);
     }
 
     return payload;
@@ -631,6 +631,14 @@ function setupTopbar(activePath, user) {
                     <strong>${escapeHtml(user.displayName)}</strong>
                     <span>${escapeHtml(roleLabel(user.role))}</span>
                 </div>
+                <nav class="mobile-user-nav" aria-label="Разделы сайта">
+                    ${links
+                        .map(
+                            (item) =>
+                                `<a class="user-menu-link" href="${item.href}">${item.label}</a>`
+                        )
+                        .join('')}
+                </nav>
                 <a class="user-menu-link" href="/profile.html">Профиль</a>
                 <button type="button" class="user-menu-link" id="logout-btn">Выйти</button>
             </div>
