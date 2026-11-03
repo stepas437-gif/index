@@ -165,7 +165,7 @@
                         <img class="cover" src="/uploads/${escapeHtml(track.cover_path)}" alt="Обложка ${escapeHtml(track.title)}">
                         <div>
                             <h3 class="track-title">${escapeHtml(track.title)}</h3>
-                            <div class="track-meta">${escapeHtml(track.artist_name)} · загрузил <a class="author-link" href="/user.html?id=${track.author_id}">${escapeHtml(track.author_name)}</a> · ${formatDate(track.created_at)}</div>
+                            <div class="track-meta">${escapeHtml(track.artist_name)} · загрузил <a class="author-link" href="/user.html?id=${track.author_id}">${escapeHtml(track.author_name)}</a>${track.author_telegram ? ` · <a class="author-link" href="https://t.me/${encodeURIComponent(track.author_telegram)}" target="_blank" rel="noreferrer">@${escapeHtml(track.author_telegram)}</a>` : ''} · ${formatDate(track.created_at)}</div>
                             <div class="track-badges">
                                 <span class="status-badge ${track.status === 'evaluated' ? 'status-evaluated' : 'status-new'}">
                                     ${statusLabel(track.status)}

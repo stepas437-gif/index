@@ -26,7 +26,7 @@
             <div class="section-title">
                 <span class="eyebrow">Аккаунт</span>
                 <h2>Профиль</h2>
-                <p>Здесь меняются аватар, имя, email и пароль.</p>
+                <p>Здесь меняются аватар, имя, email, Telegram и пароль.</p>
             </div>
         </div>
 
@@ -95,6 +95,11 @@
                     <div class="field">
                         <label for="profile-email-edit">Email</label>
                         <input id="profile-email-edit" name="email" type="email" required>
+                    </div>
+                    <div class="field">
+                        <label for="profile-telegram">Telegram</label>
+                        <input id="profile-telegram" name="telegramUsername" type="text" inputmode="text" autocomplete="off" placeholder="@username или t.me/username">
+                        <span class="field-hint">Контакт виден только тебе и стримеру. Можно указать @username или ссылку на Telegram.</span>
                     </div>
                     <div class="field">
                         <label for="profile-password">Новый пароль</label>
@@ -168,6 +173,7 @@
             document.getElementById('evaluations-count').textContent = String(payload.stats.evaluations || 0);
             document.getElementById('profile-display-name').value = user.displayName || '';
             document.getElementById('profile-email-edit').value = user.email || '';
+            document.getElementById('profile-telegram').value = user.telegramUsername ? `@${user.telegramUsername}` : '';
             document.getElementById('pending-email').textContent = user.pendingEmail ? user.pendingEmail : 'Нет';
             document.getElementById('avatar-preview').src = avatarUrl(user.avatarPath);
             applyRevealAnimations();
@@ -204,6 +210,7 @@
             const payload = {
                 displayName: String(formData.get('displayName') || '').trim(),
                 email: String(formData.get('email') || '').trim(),
+                telegramUsername: String(formData.get('telegramUsername') || '').trim(),
                 password: String(formData.get('password') || '')
             };
 

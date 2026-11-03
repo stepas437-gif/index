@@ -244,6 +244,7 @@ function publicUser(row) {
         role: row.role,
         verified: Boolean(row.verified),
         avatarPath: row.avatar_path || null,
+        telegramUsername: row.telegram_username || null,
         createdAt: row.created_at
     };
 }
@@ -256,6 +257,26 @@ function normalizeDisplayName(displayName) {
     return String(displayName || '')
         .trim()
         .toLocaleLowerCase('ru-RU');
+}
+
+function normalizeTelegramUsername(value) {
+    let username = String(value || '').trim();
+    if (!username) {
+        return '';
+    }
+
+    username = username
+        .replace(/^https?:\/\/(?:www\.)?(?:t\.me|telegram\.me)\//i, '')
+        .replace(/^(?:t\.me|telegram\.me)\//i, '')
+        .replace(/^@/, '')
+        .split(/[/?#]/, 1)[0]
+        .trim();
+
+    return username;
+}
+
+function isValidTelegramUsername(username) {
+    return /^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(username);
 }
 
 function parseNominationFlag(value) {
@@ -933,7 +954,7 @@ async function getUserBySessionToken(token) {
     }
 
     const row = await dbGet(
-        `SELECT u.id, u.email, u.display_name, u.role, u.verified, u.avatar_path, u.created_at, s.expires_at
+        `SELECT u.id, u.email, u.display_name, u.role, u.verified, u.avatar_path, u.telegram_username, u.created_at, s.expires_at
          FROM sessions s
          JOIN users u ON u.id = s.user_id
          WHERE s.token IN (?, ?)`,
@@ -1021,6 +1042,7 @@ async function bootstrap() {
             verified INTEGER NOT NULL DEFAULT 0,
             verification_token TEXT,
             avatar_path TEXT,
+            telegram_username TEXT,
             pending_email TEXT,
             pending_email_token TEXT,
             pending_password_hash TEXT,
@@ -1197,6 +1219,9 @@ async function bootstrap() {
     }
     if (!userColumnNames.has('avatar_path')) {
         await dbRun('ALTER TABLE users ADD COLUMN avatar_path TEXT');
+    }
+    if (!userColumnNames.has('telegram_username')) {
+        await dbRun('ALTER TABLE users ADD COLUMN telegram_username TEXT');
     }
     if (!userColumnNames.has('pending_email')) {
         await dbRun('ALTER TABLE users ADD COLUMN pending_email TEXT');
@@ -1429,7 +1454,7 @@ app.get('/healthz', (_req, res) => {
 app.get('/api/profile', requireAuth, async (req, res, next) => {
     try {
         const userRow = await dbGet(
-            'SELECT id, email, display_name, role, verified, avatar_path, pending_email, created_at FROM users WHERE id = ?',
+            'SELECT id, email, display_name, role, verified, avatar_path, telegram_username, pending_email, created_at FROM users WHERE id = ?',
             [req.user.id]
         );
         const tracksRow = await dbGet('SELECT COUNT(*) as count FROM tracks WHERE user_id = ?', [req.user.id]);
@@ -1458,6 +1483,7 @@ app.post('/api/profile', requireAuth, async (req, res, next) => {
         const displayName = String(req.body.displayName || '').trim();
         const email = String(req.body.email || '').trim().toLowerCase();
         const password = String(req.body.password || '');
+        const telegramUsername = normalizeTelegramUsername(req.body.telegramUsername);
         const messages = [];
         const previewLinks = [];
 
@@ -1476,21 +1502,45 @@ app.post('/api/profile', requireAuth, async (req, res, next) => {
             return;
         }
 
+        if (telegramUsername && !isValidTelegramUsername(telegramUsername)) {
+            res.status(400).json({
+                error: 'Telegram должен быть username из 5–32 символов: латинские буквы, цифры и _.'
+            });
+            return;
+        }
+
         if (password && password.length < 6) {
             res.status(400).json({ error: 'Новый пароль должен быть не короче 6 символов.' });
             return;
         }
 
-        const existingName = await findUserByDisplayName(displayName, req.user.id);
-        if (existingName) {
-            res.status(409).json({ error: 'Пользователь с таким ником уже существует.' });
+        const currentUser = await dbGet('SELECT * FROM users WHERE id = ?', [req.user.id]);
+        if (!currentUser) {
+            res.status(401).json({ error: 'Сессия истекла. Войди в аккаунт заново.' });
             return;
         }
 
-        const currentUser = await dbGet('SELECT * FROM users WHERE id = ?', [req.user.id]);
-        await dbRun('UPDATE users SET display_name = ? WHERE id = ?', [displayName, req.user.id]);
+        const displayNameChanged = normalizeDisplayName(currentUser.display_name) !== normalizeDisplayName(displayName);
+        if (displayNameChanged) {
+            const existingName = await findUserByDisplayName(displayName, req.user.id);
+            if (existingName) {
+                res.status(409).json({ error: 'Пользователь с таким ником уже существует.' });
+                return;
+            }
+        }
+
+        await dbRun('UPDATE users SET display_name = ?, telegram_username = ? WHERE id = ?', [
+            displayName,
+            telegramUsername || null,
+            req.user.id
+        ]);
         await dbRun('UPDATE tracks SET artist_name = ? WHERE user_id = ?', [displayName, req.user.id]);
-        messages.push('Имя профиля обновлено.');
+        if (displayNameChanged) {
+            messages.push('Имя профиля обновлено.');
+        }
+        if ((currentUser.telegram_username || '') !== telegramUsername) {
+            messages.push(telegramUsername ? 'Telegram сохранён.' : 'Telegram удалён из профиля.');
+        }
 
         if (email !== currentUser.email) {
             const existing = await dbGet('SELECT id FROM users WHERE email = ? AND id != ?', [email, req.user.id]);
@@ -1533,7 +1583,7 @@ app.post('/api/profile', requireAuth, async (req, res, next) => {
         }
 
         const updated = await dbGet(
-            'SELECT id, email, display_name, role, verified, avatar_path, pending_email, created_at FROM users WHERE id = ?',
+            'SELECT id, email, display_name, role, verified, avatar_path, telegram_username, pending_email, created_at FROM users WHERE id = ?',
             [req.user.id]
         );
 
@@ -1574,7 +1624,7 @@ app.post('/api/profile/avatar', requireAuth, avatarUpload.single('avatar'), asyn
         }
 
         const updated = await dbGet(
-            'SELECT id, email, display_name, role, verified, avatar_path, created_at FROM users WHERE id = ?',
+            'SELECT id, email, display_name, role, verified, avatar_path, telegram_username, created_at FROM users WHERE id = ?',
             [req.user.id]
         );
         res.json({
@@ -2061,6 +2111,7 @@ app.get('/api/admin/tracks', requireVerified, requireRole(['streamer']), async (
         const rows = await dbAll(
             `SELECT t.id, t.title, t.artist_name, t.notes, t.file_path, t.cover_path, t.status, t.created_at,
                     u.id as author_id, u.display_name as author_name, u.avatar_path as author_avatar,
+                    u.telegram_username as author_telegram,
                     e.lyrics, e.sound, e.individuality, e.structure, e.vibe,
                     e.best_track, e.best_producer, e.best_artist, e.comment
              FROM tracks t
@@ -2322,11 +2373,12 @@ app.post('/api/track-comments', requireVerified, requireRole(['streamer']), asyn
     }
 });
 
-app.get('/api/results', requireVerified, async (_req, res, next) => {
+app.get('/api/results', requireVerified, async (req, res, next) => {
     try {
         const rows = await dbAll(
             `SELECT t.id, t.title, t.artist_name, t.cover_path, t.created_at,
                     u.id as author_id, u.display_name as author_name, u.avatar_path as author_avatar,
+                    CASE WHEN ? = 'streamer' THEN u.telegram_username ELSE NULL END as author_telegram,
                     e.lyrics, e.sound, e.individuality, e.structure, e.vibe,
                     e.best_track, e.best_producer, e.best_artist, e.comment,
                     (e.lyrics + e.sound + e.individuality + e.structure + e.vibe) AS total_score
@@ -2334,7 +2386,8 @@ app.get('/api/results', requireVerified, async (_req, res, next) => {
              JOIN users u ON u.id = t.user_id
              JOIN evaluations e ON e.track_id = t.id
              WHERE t.status = 'evaluated'
-             ORDER BY total_score DESC, t.created_at ASC`
+             ORDER BY total_score DESC, t.created_at ASC`,
+            [req.user.role]
         );
 
         res.json(rows);
@@ -2352,7 +2405,7 @@ app.get('/api/users/:id', requireAuth, async (req, res, next) => {
         }
 
         const user = await dbGet(
-            'SELECT id, email, display_name, role, verified, avatar_path, created_at FROM users WHERE id = ?',
+            'SELECT id, email, display_name, role, verified, avatar_path, telegram_username, created_at FROM users WHERE id = ?',
             [userId]
         );
         if (!user) {
@@ -2378,6 +2431,10 @@ app.get('/api/users/:id', requireAuth, async (req, res, next) => {
                 role: user.role,
                 verified: Boolean(user.verified),
                 avatarPath: user.avatar_path || null,
+                telegramUsername:
+                    req.user.role === 'streamer' || req.user.id === user.id
+                        ? user.telegram_username || null
+                        : null,
                 createdAt: user.created_at
             },
             stats: {

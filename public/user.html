@@ -71,6 +71,10 @@
                         <strong>На платформе с</strong>
                         <span id="author-created" class="muted"></span>
                     </div>
+                    <div class="info-row" id="author-telegram-row" hidden>
+                        <strong>Telegram</strong>
+                        <a id="author-telegram" class="author-link" href="#" target="_blank" rel="noreferrer"></a>
+                    </div>
                 </div>
             </aside>
 
@@ -156,6 +160,15 @@
             document.getElementById('author-avatar').src = avatarUrl(user.avatarPath);
             document.getElementById('author-role').textContent = roleLabel(user.role);
             document.getElementById('author-created').textContent = formatDate(user.createdAt);
+            const telegramRow = document.getElementById('author-telegram-row');
+            const telegramLink = document.getElementById('author-telegram');
+            if (user.telegramUsername) {
+                telegramLink.textContent = `@${user.telegramUsername}`;
+                telegramLink.href = `https://t.me/${encodeURIComponent(user.telegramUsername)}`;
+                telegramRow.hidden = false;
+            } else {
+                telegramRow.hidden = true;
+            }
             document.getElementById('author-tracks-count').textContent = String(payload.stats.tracks || 0);
             document.getElementById('author-evaluated-count').textContent = String(payload.stats.evaluated || 0);
 

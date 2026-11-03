@@ -1282,6 +1282,18 @@ button.track-delete-button:hover {
   color: var(--accent);
 }
 
+.nomination-contact {
+  display: inline-flex;
+  width: fit-content;
+  color: var(--accent-strong);
+  font-size: 0.86rem;
+  text-decoration: none;
+}
+
+.nomination-contact:hover {
+  color: var(--text);
+}
+
 .nomination-badge {
   display: inline-flex;
   align-items: center;

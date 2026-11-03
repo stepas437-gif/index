@@ -150,6 +150,7 @@
                         <img class="podium-cover" src="/uploads/${escapeHtml(track.cover_path)}" alt="Обложка ${escapeHtml(track.title)}">
                         <strong>${escapeHtml(track.title)}</strong>
                         <span class="muted"><a class="author-link" href="/user.html?id=${track.author_id}">${escapeHtml(track.author_name || track.artist_name)}</a></span>
+                        ${track.author_telegram ? `<a class="nomination-contact" href="https://t.me/${encodeURIComponent(track.author_telegram)}" target="_blank" rel="noreferrer">Связаться: @${escapeHtml(track.author_telegram)}</a>` : ''}
                         <div class="score">${track.total_score}/50</div>
                     </article>
                 `;
@@ -164,6 +165,7 @@
                     <a class="nomination-person-name" href="/user.html?id=${track.author_id}">
                         <strong>${escapeHtml(track.author_name || track.artist_name)}</strong>
                     </a>
+                    ${track.author_telegram ? `<a class="nomination-contact" href="https://t.me/${encodeURIComponent(track.author_telegram)}" target="_blank" rel="noreferrer">Связаться: @${escapeHtml(track.author_telegram)}</a>` : ''}
                 </article>
             `;
         }
